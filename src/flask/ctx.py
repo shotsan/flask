@@ -431,7 +431,14 @@ class AppContext:
             return
 
         self._cv_token = _cv_app.set(self)
-        appcontext_pushed.send(self.app, _async_wrapper=self.app.ensure_sync)
+
+        try:
+            appcontext_pushed.send(self.app, _async_wrapper=self.app.ensure_sync)
+        except BaseException:
+            self._push_count -= 1
+            _cv_app.reset(self._cv_token)
+            self._cv_token = None
+            raise
 
         if self._request is not None:
             # Open the session at the moment that the request context is available.

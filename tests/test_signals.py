@@ -1,3 +1,5 @@
+import pytest
+
 import flask
 
 
@@ -134,6 +136,29 @@ def test_appcontext_signals(app, client):
     finally:
         flask.appcontext_pushed.disconnect(record_push, app)
         flask.appcontext_popped.disconnect(record_pop, app)
+
+
+def test_appcontext_pushed_signal_error_does_not_leak_context(app):
+    def fail(sender, **kwargs):
+        raise RuntimeError("signal failed")
+
+    flask.appcontext_pushed.connect(fail, app)
+    try:
+        with pytest.raises(RuntimeError, match="signal failed"):
+            with app.app_context():
+                pass
+
+        assert not flask.has_app_context()
+
+        ctx = app.app_context()
+        with pytest.raises(RuntimeError, match="signal failed"):
+            ctx.push()
+
+        assert not flask.has_app_context()
+        assert ctx._cv_token is None
+        assert ctx._push_count == 0
+    finally:
+        flask.appcontext_pushed.disconnect(fail, app)
 
 
 def test_flash_signal(app):
